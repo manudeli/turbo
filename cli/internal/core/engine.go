@@ -260,7 +260,7 @@ func (e *Engine) AddDep(fromTaskID string, toTaskID string) error {
 		return fmt.Errorf("found reference to unknown package: %v in task %v", fromPkg, fromTaskID)
 	}
 
-	if _, ok := e.PackageTaskDeps[fromTaskID]; !ok {
+	if _, ok := e.PackageTaskDeps[toTaskID]; !ok {
 		e.PackageTaskDeps[toTaskID] = []string{}
 	}
 
@@ -314,7 +314,7 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 			}
 
 			// Get information about the package
-			pkg, pkgExists := graph.PackageInfos[packageName]
+			pkg, pkgExists := graph.WorkspaceInfos[packageName]
 			if !pkgExists {
 				return fmt.Errorf("Cannot find package %v", packageName)
 			}

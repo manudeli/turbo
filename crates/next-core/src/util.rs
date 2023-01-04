@@ -1,17 +1,15 @@
 use anyhow::{anyhow, bail, Result};
-use turbo_tasks::ValueToString;
+use turbo_tasks::{primitives::StringVc, ValueToString};
 use turbo_tasks_fs::FileSystemPathVc;
+use turbopack_node::path_regex::{PathRegexBuilder, PathRegexVc};
 
-use crate::path_regex::{PathRegexBuilder, PathRegexVc};
-
-/// Converts a filename within the server root to a regular expression with
-/// named capture groups for every dynamic segment.
+/// Converts a filename within the server root into a next pathname.
 #[turbo_tasks::function]
-pub async fn regular_expression_for_path(
+pub async fn pathname_for_path(
     server_root: FileSystemPathVc,
     server_path: FileSystemPathVc,
     has_extension: bool,
-) -> Result<PathRegexVc> {
+) -> Result<StringVc> {
     let server_path_value = &*server_path.await?;
     let path = if let Some(path) = server_root.await?.get_path_to(server_path_value) {
         path
@@ -34,6 +32,16 @@ pub async fn regular_expression_for_path(
     } else {
         path.strip_suffix("/index").unwrap_or(path)
     };
+
+    Ok(StringVc::cell(path.to_string()))
+}
+
+/// Converts a filename within the server root into a regular expression with
+/// named capture groups for every dynamic segment.
+#[turbo_tasks::function]
+pub async fn regular_expression_for_path(pathname: StringVc) -> Result<PathRegexVc> {
+    let path = pathname.await?;
+
     let mut path_regex = PathRegexBuilder::new();
     for segment in path.split('/') {
         if let Some(segment) = segment.strip_prefix('[') {
@@ -70,5 +78,17 @@ pub async fn regular_expression_for_path(
             path_regex.push_static_segment(segment);
         }
     }
+
     Ok(PathRegexVc::cell(path_regex.build()?))
+}
+
+// Adapted from https://github.com/vercel/next.js/blob/canary/packages/next/shared/lib/router/utils/get-asset-path-from-route.ts
+pub fn get_asset_path_from_route(route: &str, ext: &str) -> String {
+    if route.is_empty() {
+        format!("index{}", ext)
+    } else if route == "index" || route.starts_with("index/") {
+        format!("index/{}{}", route, ext)
+    } else {
+        format!("{}{}", route, ext)
+    }
 }
